@@ -1,3 +1,3 @@
 pit
 ===
-A game engine for the Pit commodity-trading boardgame. (work still in progress)
+A game engine for the Pit commodity-trading card game. (work still in progress)
