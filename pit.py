@@ -7,6 +7,20 @@ Therefore, in each cycle, all player actions are based on information known at
 the end of the previous cycle, but the order of execution is random, so if two
 players attempt to do the same thing (e.g. respond to an offer or ring the
 trading bell), luck will determine who does it first.
+
+TODO LIST:
+- change structure, players folder, tests folder, pit.py -> gameengine.py
+- make a basic player and start testing
+OPTIONAL TODOS:
+- error-checking of things like player hands, legal actions etc.
+- error-checking that cards are locked up when player issues a response
+- withdraw offer method?
+    - not sure if needed, can always ignore responses to an offer
+- withdraw response method?
+    - not sure if needed, probably nice, but game should be functional without it
+    - if doing this, need to deal with issue of confirm & withdraw happening on
+      same cycle - probably make the withdrawal pending until the cycle ends with
+      no confirms, then remove it
 """
 import itertools
 import random
@@ -31,7 +45,9 @@ COMMODITIES = {
 }
 
 BULL = 'bull'
+BULL_PENALTY = 20
 BEAR = 'bear'
+BEAR_PENALTY = 20
 
 
 class Action(object):
@@ -47,13 +63,17 @@ class Offer(Action):
 
 
 class Response(Action):
-    # when issuing a response you should lock those commodities up
-    # and not make them part of any other offer or response
-    # TODO error check this in the game engine
-    def __init__(self, player, target, quantity):
+    """Response to an offer.
+
+    A response is binding - a player issuing one should not make any other
+    offers or responses with these cards until this response is confirmed,
+    withdrawn, or expired.
+    """
+    def __init__(self, player, target, quantity, offer=None):
         super(Offer, self).__init__(player)
         self.target = target
         self.quantity = quantity
+        self.offer = offer
 
 
 class Confirmation(Action):
@@ -62,7 +82,7 @@ class Confirmation(Action):
         self.response = response
 
 
-class RingBell(Action):
+class BellRing(Action):
     pass
 
 
@@ -88,14 +108,14 @@ class Player(object):
     def offer_expired(self, offer):
         """Your prior offer has expired without executing"""
 
-    def response_made(self, player, offer):
+    def response_made(self, response):
         """A player has responded to your prior offer"""
 
-    def trade_confirmation(self, player1, player2, quantity, offer=None):
-        """Two players (possibly you are one of them) have made a trade"""
-
-    def response_expired(self, player, offer):
+    def response_expired(self, response):
         """Your response to a specific player expired without being accepted"""
+
+    def trade_confirmation(self, confirmation):
+        """Two players (possibly you are one of them) have made a trade"""
 
     def closing_bell(self, player):
         """A player has rung the closing bell"""
@@ -136,8 +156,7 @@ class GameEngine(object):
         self.game_state['responses'] = []
         while self.game_state['in_play']:
             self.one_cycle()
-
-        # TODO update scores, check if anyone won & set self.winner
+        self.update_scores()
 
     def one_cycle(self):
         """One cycle gives each player the chance to perform an action"""
@@ -168,53 +187,92 @@ class GameEngine(object):
 
     def send_response(self, response):
         """Issue a response to an offer"""
-        # TODO this method
+        response.cycle = self.game_state['cycle']
+        self.game_state['responses'].append(response)
+        response.target.response_made(response)
 
     def confirm(self, confirmation):
         """Confirm a trade between two players"""
-        # TODO this method
+        if confirmation.response.offer:
+            self.game_state['offers'].remove(confirmation.response.offer)
+        self.game_state['responses'].remove(confirmation.response)
+        for player in self.game_state['players']:
+            player.trade_confirmation(confirmation)
 
     def ring_bell(self, bell_ring):
         """Ring the closing bell"""
-        # TODO this method
-        # send out closing bell event
-        # if player wins then:
-        # - mark in_play False
-        # - send out closing bell confirmed event
-
-
+        for player in self.players:
+            player.closing_bell()
+        if self.has_winning_hand(bell_ring.player):
+            self.game_state['in_play'] = False
+            for player in self.players:
+                player.closing_bell_confirmed(bell_ring.player)
 
     ACTION_METHODS = {
         Offer: self.add_offer,
         Response: self.send_response,
         Confirmation: self.confirm,
-        RingBell: self.ring_bell,
+        BellRing: self.ring_bell,
     }
 
-    # TODO - I am here working on the individual action methods
+    def has_winning_hand(self, player):
+        """Returns True iff player has a valid winning hand
+
+        To have a winning hand, the player must have 9 cards consisting of only
+        a single commodity and (optionally) the bull card. Player must not have
+        the bear card at all.
+        """
+        cards = self.game_state[player]['cards']
+        if BEAR in cards:
+            return False
+        largest_group = cards.count(max(set(cards), key=cards.count))
+        return largest_group == 9 or largest_group == 8 and BULL in cards
+
+    def update_scores(self):
+        """Updates player scores at end of a round, sets winner if any."""
+        for player in self.players:
+            score = 0
+            cards = self.game_state[player]['cards']
+            if self.has_winning_hand(player):
+                commodity = max(set(cards), key=cards.count)
+                score += COMMODITIES[commodity]
+                if BULL in cards and BEAR in cards:
+                    score *= 2
+            else:
+                if BULL in cards:
+                    score -= BULL_PENALTY
+                if BEAR in cards:
+                    score -= BEAR_PENALTY
+            self.game_state[player]['score'] += score
+            if self.game_state[player]['score'] >= WINNING_SCORE:
+                self.winner = player
 
     def clean_actions(self):
         """Remove any expired offers or responses"""
-
-        # TODO need to get the offers & responses that expired and
-        # send out expired events for all of them
-        # so what I really want to do is split game_state['offers'] into
-        # two mutually exlusive lists, keep one & send events for the other
-        # then do the same for responses
-
+        expired_offers = list(filter(
+            self.expired_offer, self.game_state['offers']))
         self.game_state['offers'] = list(itertools.ifilterfalse(
-            self._expired_offer, self.game_state['offers']))
-        self.game_state['responses'] = list(itertools.ifilterfalse(
-            self._expired_response, self.game_state['responses']))
+            self.expired_offer, self.game_state['offers']))
 
-    def _expired_offer(self, offer):
+        for offer in expired_offers:
+            offer.player.offer_expired(offer)
+
+        expired_responses = list(filter(
+            self.expired_response, self.game_state['responses']))
+        self.game_state['responses'] = list(itertools.ifilterfalse(
+            self.expired_response, self.game_state['responses']))
+
+        for response in expired_responses:
+            response.player.response_expired(response)
+
+    def expired_offer(self, offer):
         """True iff this offer is expired
 
         An offer added in cycle 0 gets to live through cycle <OFFER_CYCLES>
         """
         return self.game_state['cycle'] - offer.cycle > OFFER_CYCLES
 
-    def _expired_response(self, response):
+    def expired_response(self, response):
         """True iff this response is expired
 
         A response added in cycle 0 gets to live through cycle <RESPONSE_CYCLES>
