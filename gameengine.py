@@ -9,10 +9,6 @@ players attempt to do the same thing (e.g. respond to an offer or ring the
 trading bell), luck will determine who does it first.
 
 TODO LIST:
-- maybe require a yes/no answer to a response, since it's binding and preventing
-  the other player from using those cards for anything else while they wait
-- include actual cards (privately) for each order
-- actually exchange cards on a trade confirmation
 - make a basic player and start testing
 OPTIONAL TODOS:
 - error-checking of things like player hands, legal actions etc.
@@ -84,7 +80,10 @@ class Response(Action):
     offers or responses with these cards until this response is confirmed,
     withdrawn, or expired.
     """
-    def __init__(self, offer, player):
+    def __init__(self, offer, player, cards):
+        """Game engine needs to know the cards so it can execute a trade. They
+        will be removed before the response is sent to the target player.
+        """
         super(Response, self).__init__(player)
         self.offer = offer
 
@@ -124,13 +123,13 @@ class Player(object):
     def response_made(self, response):
         """A player has responded to your prior offer
 
-        Should return True/False based on whether you accept/reject the trade.
+        Should return list of cards if you accept the offer, else None.
         """
 
     def response_rejected(self, response):
         """Your response to a specific player was rejected"""
 
-    def trade_confirmation(self, confirmation):
+    def trade_confirmation(self, response):
         """Two players (possibly you are one of them) have made a trade"""
 
     def closing_bell(self, player):
@@ -208,16 +207,31 @@ class GameEngine(object):
             player.offer_made(offer)
 
     def send_response(self, response):
-        """Issue a response to an offer"""
+        """Issue a response to an offer
+
+        This also grabs the response's cards & removes them from the response.
+        They are saved so they can be used if the trade ends up executing.
+        """
         response.cycle = self.game_state['cycle']
-        if response.target.response_made(response):
-            self.confirm(response)
+        response_cards = response.cards
+        response.cards = None
+        confirm_cards = response.target.response_made(response)
+        if confirm_cards:
+            self.confirm(response, response_cards, confirm_cards)
         else:
             response.player.response_rejected(response)
 
-    def confirm(self, response):
+    def confirm(self, response, response_cards, confirm_cards):
         """Confirm a trade between two players"""
         self.game_state['offers'].remove(response.offer)
+
+        for card in response_cards:
+            self.game_state[response.player]['cards'].remove(card)
+            self.game_state[response.offer.player]['cards'].append(card)
+        for card in confirm_cards:
+            self.game_state[response.offer.player]['cards'].remove(card)
+            self.game_state[response.player]['cards'].append(card)
+
         for player in self.game_state['players']:
             player.trade_confirmation(response)
 
@@ -233,7 +247,6 @@ class GameEngine(object):
     ACTION_METHODS = {
         Offer: add_offer,
         Response: send_response,
-        Confirmation: confirm,
         BellRing: ring_bell,
     }
 
@@ -284,13 +297,6 @@ class GameEngine(object):
         An offer added in cycle 0 gets to live through cycle <OFFER_CYCLES>
         """
         return self.game_state['cycle'] - offer.cycle > OFFER_CYCLES
-
-    def expired_response(self, response):
-        """True iff this response is expired
-
-        A response added in cycle 0 gets to live through cycle <RESPONSE_CYCLES>
-        """
-        return self.game_state['cycle'] - response.cycle > RESPONSE_CYCLES
 
     def deal_cards(self):
         """Sets game_state cards to a new set of shuffled cards"""
