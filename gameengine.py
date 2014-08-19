@@ -55,11 +55,21 @@ class Action(object):
         self.player = player
         self.cycle = -1 # to be set by game engine
 
+    def __unicode__(self):
+        return 'Action: player {0} in cycle {1}'.format(self.player, self.cycle)
+
+    def __str__(self):
+        return unicode(self).encode('utf-8')
+
 
 class Offer(Action):
     def __init__(self, player, quantity):
         super(Offer, self).__init__(player)
         self.quantity = quantity
+
+    def __unicode__(self):
+        return 'Offer by {0} for {1} in cycle {2}'.format(
+            self.player, self.quantity, self.cycle)
 
 
 class Response(Action):
@@ -69,26 +79,33 @@ class Response(Action):
     offers or responses with these cards until this response is confirmed,
     withdrawn, or expired.
     """
-    def __init__(self, player, target, quantity, offer=None):
-        super(Offer, self).__init__(player)
-        self.target = target
-        self.quantity = quantity
+    def __init__(self, offer, player):
+        super(Response, self).__init__(player)
         self.offer = offer
+
+    def __unicode__(self):
+        return 'Response by {0} to {1} in cycle {2}'.format(
+            self.player, self.offer, self.cycle)
 
 
 class Confirmation(Action):
     def __init__(self, player, response):
-        super(Offer, self).__init__(player)
+        super(Confirmation, self).__init__(player)
         self.response = response
+
+    def __unicode__(self):
+        return 'Confirmation from {0} to {1} in cycle {2}'.format(
+            self.player, self.response, self.cycle)
 
 
 class BellRing(Action):
-    pass
+    def __unicode__(self):
+        return 'Bell Ring by {0} in cycle {1}'.format(self.player, self.cycle)
 
 
 class Player(object):
-    def get_name(self):
-        """What is this player's name?"""
+    def __init__(self):
+        self.name = 'Player {0}'.format(random.randint(1,9999))
 
     def new_game(self, game_state):
         """New game started with fresh game state"""
@@ -123,6 +140,11 @@ class Player(object):
     def closing_bell_confirmed(self, player):
         """The game engine has confirmed that a player has won this round"""
 
+    def __unicode__(self):
+        return self.name
+
+    def __str__(self):
+        return unicode(self).encode('utf-8')
 
 
 class GameEngine(object):
@@ -146,16 +168,18 @@ class GameEngine(object):
     def one_round(self):
         """Plays round, updates scores, sets self.winner if anyone won
         """
-        self.deal_cards()
-        for player in self.players:
-            player.new_round(self.game_state[player]['cards'])
-
         self.game_state['cycle'] = 0
         self.game_state['in_play'] = True
         self.game_state['offers'] = []
         self.game_state['responses'] = []
+
+        self.deal_cards()
+        for player in self.players:
+            player.new_round(self.game_state[player]['cards'])
+
         while self.game_state['in_play']:
             self.one_cycle()
+            self.debug_and_exit()
         self.update_scores()
 
     def one_cycle(self):
@@ -209,10 +233,10 @@ class GameEngine(object):
                 player.closing_bell_confirmed(bell_ring.player)
 
     ACTION_METHODS = {
-        Offer: self.add_offer,
-        Response: self.send_response,
-        Confirmation: self.confirm,
-        BellRing: self.ring_bell,
+        Offer: add_offer,
+        Response: send_response,
+        Confirmation: confirm,
+        BellRing: ring_bell,
     }
 
     def has_winning_hand(self, player):
@@ -236,7 +260,7 @@ class GameEngine(object):
             if self.has_winning_hand(player):
                 commodity = max(set(cards), key=cards.count)
                 score += COMMODITIES[commodity]
-                if BULL in cards and BEAR in cards:
+                if BULL in cards and cards.count(commodity) == 9:
                     score *= 2
             else:
                 if BULL in cards:
@@ -304,17 +328,14 @@ class GameEngine(object):
 
     def debug_and_exit(self):
         """Helper to print game state and exit game"""
+        print 'CYCLE {0}'.format(self.game_state['cycle'])
         for player in self.players:
-            print player
-            print self.game_state[player]
-            print ''
+            print 'PLAYER {0}: {1}'.format(unicode(player), self.game_state[player])
+        print 'OFFERS {0}'.format(self.game_state['offers'])
+        print 'RESPONSES {0}'.format(self.game_state['responses'])
+        print 'IN PLAY? {0}'.format(self.game_state['in_play'])
+
+
         import sys
         sys.exit(0)
 
-
-
-
-
-engine = GameEngine()
-players = [Player() for p in range(7)]
-engine.one_game(players)
