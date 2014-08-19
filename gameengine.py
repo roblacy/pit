@@ -9,7 +9,10 @@ players attempt to do the same thing (e.g. respond to an offer or ring the
 trading bell), luck will determine who does it first.
 
 TODO LIST:
-- change structure, players folder, tests folder, pit.py -> gameengine.py
+- maybe require a yes/no answer to a response, since it's binding and preventing
+  the other player from using those cards for anything else while they wait
+- include actual cards (privately) for each order
+- actually exchange cards on a trade confirmation
 - make a basic player and start testing
 OPTIONAL TODOS:
 - error-checking of things like player hands, legal actions etc.
@@ -63,6 +66,8 @@ class Action(object):
 
 
 class Offer(Action):
+    """An offer to trade a certain number of cards, made to anyone/everyone.
+    """
     def __init__(self, player, quantity):
         super(Offer, self).__init__(player)
         self.quantity = quantity
@@ -88,17 +93,8 @@ class Response(Action):
             self.player, self.offer, self.cycle)
 
 
-class Confirmation(Action):
-    def __init__(self, player, response):
-        super(Confirmation, self).__init__(player)
-        self.response = response
-
-    def __unicode__(self):
-        return 'Confirmation from {0} to {1} in cycle {2}'.format(
-            self.player, self.response, self.cycle)
-
-
 class BellRing(Action):
+    """The action of ringing the bell to indicate that you have won the round"""
     def __unicode__(self):
         return 'Bell Ring by {0} in cycle {1}'.format(self.player, self.cycle)
 
@@ -126,10 +122,13 @@ class Player(object):
         """Your prior offer has expired without executing"""
 
     def response_made(self, response):
-        """A player has responded to your prior offer"""
+        """A player has responded to your prior offer
 
-    def response_expired(self, response):
-        """Your response to a specific player expired without being accepted"""
+        Should return True/False based on whether you accept/reject the trade.
+        """
+
+    def response_rejected(self, response):
+        """Your response to a specific player was rejected"""
 
     def trade_confirmation(self, confirmation):
         """Two players (possibly you are one of them) have made a trade"""
@@ -171,7 +170,6 @@ class GameEngine(object):
         self.game_state['cycle'] = 0
         self.game_state['in_play'] = True
         self.game_state['offers'] = []
-        self.game_state['responses'] = []
 
         self.deal_cards()
         for player in self.players:
@@ -212,16 +210,16 @@ class GameEngine(object):
     def send_response(self, response):
         """Issue a response to an offer"""
         response.cycle = self.game_state['cycle']
-        self.game_state['responses'].append(response)
-        response.target.response_made(response)
+        if response.target.response_made(response):
+            self.confirm(response)
+        else:
+            response.player.response_rejected(response)
 
-    def confirm(self, confirmation):
+    def confirm(self, response):
         """Confirm a trade between two players"""
-        if confirmation.response.offer:
-            self.game_state['offers'].remove(confirmation.response.offer)
-        self.game_state['responses'].remove(confirmation.response)
+        self.game_state['offers'].remove(response.offer)
         for player in self.game_state['players']:
-            player.trade_confirmation(confirmation)
+            player.trade_confirmation(response)
 
     def ring_bell(self, bell_ring):
         """Ring the closing bell"""
@@ -272,22 +270,13 @@ class GameEngine(object):
                 self.winner = player
 
     def clean_actions(self):
-        """Remove any expired offers or responses"""
+        """Remove any expired offers"""
         expired_offers = list(filter(
             self.expired_offer, self.game_state['offers']))
         self.game_state['offers'] = list(itertools.ifilterfalse(
             self.expired_offer, self.game_state['offers']))
-
         for offer in expired_offers:
             offer.player.offer_expired(offer)
-
-        expired_responses = list(filter(
-            self.expired_response, self.game_state['responses']))
-        self.game_state['responses'] = list(itertools.ifilterfalse(
-            self.expired_response, self.game_state['responses']))
-
-        for response in expired_responses:
-            response.player.response_expired(response)
 
     def expired_offer(self, offer):
         """True iff this offer is expired
@@ -332,7 +321,6 @@ class GameEngine(object):
         for player in self.players:
             print 'PLAYER {0}: {1}'.format(unicode(player), self.game_state[player])
         print 'OFFERS {0}'.format(self.game_state['offers'])
-        print 'RESPONSES {0}'.format(self.game_state['responses'])
         print 'IN PLAY? {0}'.format(self.game_state['in_play'])
 
 
