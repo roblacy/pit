@@ -111,7 +111,6 @@ class BasicPlayer(gameengine.Player):
 
     def _group_cards(self):
         """Breaks cards into groups keyed by type, count as values"""
-        if self.cards != self.game_state[self]['cards']:
         self.card_groups = {}
         for card in set(self.cards):
             self.card_groups[card] = self.cards.count(card)
