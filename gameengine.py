@@ -9,8 +9,8 @@ players attempt to do the same thing (e.g. respond to an offer or ring the
 trading bell), luck will determine who does it first.
 
 TODO LIST:
-- make a basic player and start testing
-OPTIONAL TODOS:
+- Remove prior open offers when player performs any action?
+- Have a trade take several cycles. Prob will increase strategy opportunity.
 - error-checking of things like player hands, legal actions etc.
 - error-checking that cards are locked up when player issues a response
 - withdraw offer method?
@@ -20,7 +20,17 @@ OPTIONAL TODOS:
     - if doing this, need to deal with issue of confirm & withdraw happening on
       same cycle - probably make the withdrawal pending until the cycle ends with
       no confirms, then remove it
+
+ASYNC GAME ENGINE
+- run each player and game engine in separate threads/processes
+- shared queue of actions
+- shared game state, maybe some callbacks as well (?)
+- game engine just listens at one end of the queue and processes actions as they
+  come in
+- QUESTION: will players get fair CPU time? If not automatic, can it be ensured?
+
 """
+import copy
 import itertools
 import random
 
@@ -55,9 +65,12 @@ class Action(object):
         self.cycle = -1 # to be set by game engine
 
     def __unicode__(self):
-        return 'Action: player {0} in cycle {1}'.format(self.player, self.cycle)
+        return 'Action'
 
     def __str__(self):
+        return unicode(self).encode('utf-8')
+
+    def __repr__(self):
         return unicode(self).encode('utf-8')
 
 
@@ -66,10 +79,12 @@ class Offer(Action):
     """
     def __init__(self, player, quantity):
         super(Offer, self).__init__(player)
+        if quantity > 4:
+            raise Exception('Offers can only be up to four cards')
         self.quantity = quantity
 
     def __unicode__(self):
-        return 'Offer by {0} for {1} in cycle {2}'.format(
+        return 'Offer in cycle {2} by {0} for {1}'.format(
             self.player, self.quantity, self.cycle)
 
 
@@ -86,16 +101,17 @@ class Response(Action):
         """
         super(Response, self).__init__(player)
         self.offer = offer
+        self.cards = cards
 
     def __unicode__(self):
-        return 'Response by {0} to {1} in cycle {2}'.format(
+        return 'Response in cycle {2} by {0} to {1}'.format(
             self.player, self.offer, self.cycle)
 
 
 class BellRing(Action):
     """The action of ringing the bell to indicate that you have won the round"""
     def __unicode__(self):
-        return 'Bell Ring by {0} in cycle {1}'.format(self.player, self.cycle)
+        return 'Bell Ring in cycle {1} by {0}'.format(self.player, self.cycle)
 
 
 class Player(object):
@@ -144,6 +160,9 @@ class Player(object):
     def __str__(self):
         return unicode(self).encode('utf-8')
 
+    def __repr__(self):
+        return unicode(self).encode('utf-8')
+
 
 class GameEngine(object):
     def one_game(self, players, starting_dealer=0):
@@ -159,8 +178,6 @@ class GameEngine(object):
         while not self.winner:
             self.one_round()
             self.next_dealer()
-
-        print 'Player {name} has won'.format(self.winner.get_name())
         return self.winner
 
     def one_round(self):
@@ -174,26 +191,40 @@ class GameEngine(object):
         for player in self.players:
             player.new_round(self.game_state[player]['cards'])
 
+        cycles_played = 0
         while self.game_state['in_play']:
             self.one_cycle()
-            self.debug_and_exit()
+            cycles_played += 1
+            if cycles_played > 2000:
+                self.debug()
+                import sys
+                sys.exit(-1)
+
         self.update_scores()
 
     def one_cycle(self):
         """One cycle gives each player the chance to perform an action"""
-        actions = []
-        for player in self.players:
-            action = player.get_action()
-            if action:
-                action.cycle = self.game_state['cycle']
-                actions.append(action)
-        random.shuffle(actions)
+        actions = self.collect_actions()
         for action in actions:
             self.process_action(action)
             if not self.game_state['in_play']:
                 return
         self.game_state['cycle'] += 1
         self.clean_actions()
+
+    def collect_actions(self):
+        """Collects and randomizes player actions, locking cards as needed"""
+        actions = []
+        self.locked_cards = {}
+        for player in self.players:
+            action = player.get_action()
+            if action:
+                action.cycle = self.game_state['cycle']
+                actions.append(action)
+                if isinstance(action, Response):
+                    self.locked_cards[player] = action.cards
+        random.shuffle(actions)
+        return actions
 
     def process_action(self, action):
         """One player makes one action"""
@@ -207,7 +238,16 @@ class GameEngine(object):
             player.offer_made(offer)
 
     def send_response(self, response):
-        """Issue a response to an offer
+        """Issue a response to player who made initial offer.
+
+        The initial player immediately accepts or rejects the response, so by
+        the end of this method the response is either rejected or the trade is
+        confirmed.
+
+        The response will be also rejected under any of these conditions:
+        - same player made both offer and response
+        - offer no longer present in game state list of offers
+        - player making response no longer has these cards
 
         This also grabs the response's cards & removes them from the response.
         They are saved so they can be used if the trade ends up executing.
@@ -215,11 +255,16 @@ class GameEngine(object):
         response.cycle = self.game_state['cycle']
         response_cards = response.cards
         response.cards = None
-        confirm_cards = response.target.response_made(response)
-        if confirm_cards:
-            self.confirm(response, response_cards, confirm_cards)
-        else:
-            response.player.response_rejected(response)
+
+        if (response.offer in self.game_state['offers'] and
+                response.player != response.offer.player and
+                self.still_has_cards(response.player, response_cards)):
+            confirm_cards = response.offer.player.response_made(response)
+            if confirm_cards:
+                self.confirm(response, response_cards, confirm_cards)
+                return
+        # player rejected response or offer was already removed
+        response.player.response_rejected(response)
 
     def confirm(self, response, response_cards, confirm_cards):
         """Confirm a trade between two players"""
@@ -232,13 +277,13 @@ class GameEngine(object):
             self.game_state[response.offer.player]['cards'].remove(card)
             self.game_state[response.player]['cards'].append(card)
 
-        for player in self.game_state['players']:
+        for player in self.players:
             player.trade_confirmation(response)
 
     def ring_bell(self, bell_ring):
         """Ring the closing bell"""
         for player in self.players:
-            player.closing_bell()
+            player.closing_bell(bell_ring.player)
         if self.has_winning_hand(bell_ring.player):
             self.game_state['in_play'] = False
             for player in self.players:
@@ -249,6 +294,15 @@ class GameEngine(object):
         Response: send_response,
         BellRing: ring_bell,
     }
+
+    def still_has_cards(self, player, cards):
+        """Returns True iff the given player still has the given cards"""
+        player_cards = copy.copy(self.game_state[player]['cards'])
+        for card in cards:
+            if card not in player_cards:
+                return False
+            player_cards.remove(card)
+        return True
 
     def has_winning_hand(self, player):
         """Returns True iff player has a valid winning hand
@@ -321,15 +375,14 @@ class GameEngine(object):
         next = self.game_state['dealer'] + 1
         self.game_state['dealer'] = next if next < len(self.players) else 0
 
-    def debug_and_exit(self):
+    def debug(self):
         """Helper to print game state and exit game"""
         print 'CYCLE {0}'.format(self.game_state['cycle'])
         for player in self.players:
-            print 'PLAYER {0}: {1}'.format(unicode(player), self.game_state[player])
+            cards = copy.copy(self.game_state[player]['cards'])
+            cards.sort()
+            print 'PLAYER {0}: score={1} cards={2}'.format(
+                unicode(player), self.game_state[player]['score'], cards)
         print 'OFFERS {0}'.format(self.game_state['offers'])
         print 'IN PLAY? {0}'.format(self.game_state['in_play'])
-
-
-        import sys
-        sys.exit(0)
-
+        print '---------------'
