@@ -14,6 +14,8 @@ class BasicPlayer(gameengine.Player):
 
     TODO LIST
     - do not accept a response if cards already locked up in own response
+    - if I have exactly 5 and 5 of two commodities, be able to break one
+      of them up and trade less than 5 cards
     """
     def __init__(self, name):
         super(BasicPlayer, self).__init__()
