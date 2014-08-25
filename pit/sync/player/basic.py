@@ -3,7 +3,7 @@
 import random
 import copy
 
-import pit.gameengine as gameengine
+import pit.sync.gameengine as gameengine
 
 
 class BasicPlayer(gameengine.Player):
