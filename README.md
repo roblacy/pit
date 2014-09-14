@@ -24,5 +24,5 @@ links
 - [Rules](http://www.howdoyouplayit.com/pit-card-game-rules/) (I use the bull & bear variant)
 - [Boardgame Geek page](http://boardgamegeek.com/boardgame/140/pit)
 
-*if you are interested in buying the game, I recommend "Deluxe Pit" which comes the a bell :-)*
+*if you are interested in buying the game, I recommend "Deluxe Pit" which comes with a bell :-)*
 
