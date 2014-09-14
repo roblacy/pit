@@ -1,7 +1,7 @@
 import time
 
-from pit import gameengine
-from pit.player import base, basic
+from pit.async import gameengine
+from pit.async.player import base, basic
 
 
 
@@ -18,5 +18,8 @@ if __name__ == '__main__':
         basic.SimplePlayer('han'),
         basic.SimplePlayer('jen'),
     ]
-    ge.play(players, games=1)
-    print 'TOTAL TIME: {0} seconds'.format(time.time() - start_time)
+
+    games = 1
+    print 'STARTING {0} GAME(S)'.format(games)
+    ge.play(players, games=games)
+    print 'TOTAL TIME: {0} SECONDS'.format(time.time() - start_time)

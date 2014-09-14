@@ -8,8 +8,9 @@ import random
 import threading
 import time
 
-from pit import config, gameengine, util
-from pit.player import base
+from pit import config, util
+from pit.async import gameengine
+from pit.async.player import base
 
 
 # seconds before withdrawing a binding offer

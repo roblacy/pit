@@ -9,6 +9,9 @@ players attempt to do the same thing (e.g. respond to an offer or ring the
 trading bell), luck will determine who does it first.
 
 TODO LIST:
+- use new things added in the async version:
+    - switch to Offer/Binding Offer terminology
+    - use util.py and config.py
 - Remove prior open offers when player performs any action?
 - Have a trade take several cycles. Prob will increase strategy opportunity.
 - error-checking of things like player hands, legal actions etc.
@@ -191,14 +194,8 @@ class GameEngine(object):
         for player in self.players:
             player.new_round(self.game_state[player]['cards'])
 
-        cycles_played = 0
         while self.game_state['in_play']:
             self.one_cycle()
-            cycles_played += 1
-            if cycles_played > 2000:
-                self.debug()
-                import sys
-                sys.exit(-1)
 
         self.update_scores()
 
