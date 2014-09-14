@@ -13,16 +13,14 @@ Synchronous version
 Async version
 -------------
 - pit/async/gameengine.py
-- players are spanwed as processes, each with its own pipe and queue for communication back to the game engine
+- players are spawned as processes, each with its own pipe and queue for communication back to the game engine
 - my current sample/debugging players (SimplePlayer) are *extremely* inefficient, taking several minutes (and hundreds of thousands of decisions) to complete a single game to 500.
 
 links
 -----
-[Pit Wikipedia page]
+- [Pit Wikipedia page](http://en.wikipedia.org/wiki/Pit_\(game\)) 
+- [Rules](http://www.howdoyouplayit.com/pit-card-game-rules/) (I use the bull & bear variant)
+- [Boardgame Geek page](http://boardgamegeek.com/boardgame/140/pit)
 
-[Rules]
-
-[Boardgame Geek page]
-
-(if you are intersted in buyin the game, I recommend "Deluxe Pit" which comes the a bell :-)
+*if you are interested in buying the game, I recommend "Deluxe Pit" which comes the a bell :-)*
 
