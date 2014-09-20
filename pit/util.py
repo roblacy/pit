@@ -49,7 +49,6 @@ def score_hand(cards):
             score -= config.BULL_PENALTY
     return score
 
-
 def available_card_groups(cards, locked_cards):
     """Returns cards not in locked_cards, grouped into counts.
 

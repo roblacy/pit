@@ -313,18 +313,7 @@ class GameEngine(object):
     def update_scores(self):
         """Updates player scores at end of a round, sets winner if any."""
         for player in self.players:
-            score = 0
-            cards = self.game_state[player]['cards']
-            if util.is_winning_hand(self.game_state[player]['cards']):
-                commodity = max(set(cards), key=cards.count)
-                score += config.COMMODITIES[commodity]
-                if config.BULL in cards and cards.count(commodity) == config.COMMODITIES_PER_HAND:
-                    score *= 2
-            else:
-                if config.BULL in cards:
-                    score -= config.BULL_PENALTY
-                if config.BEAR in cards:
-                    score -= config.BEAR_PENALTY
+            score = util.score_hand(self.game_state[player]['cards'])
             self.game_state[player]['score'] += score
             if self.game_state[player]['score'] >= config.WINNING_SCORE:
                 self.winner = player
