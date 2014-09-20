@@ -3,7 +3,7 @@
 import random
 import copy
 
-from pit import config
+from pit import config, util
 from pit.sync import gameengine
 
 
@@ -38,7 +38,7 @@ class BasicPlayer(gameengine.Player):
         """
         self._group_cards()
 
-        if self._has_winning_hand():
+        if util.is_winning_hand(self.cards):
             return gameengine.BellRing(self)
         offers = copy.copy(self.game_state['offers'])
         random.shuffle(offers)
@@ -56,13 +56,6 @@ class BasicPlayer(gameengine.Player):
         """
         self._group_cards()
         return self._matching_cards(response.offer)
-
-    def _has_winning_hand(self):
-        """True if currently holding a winning hand"""
-        if config.BEAR in self.cards:
-            return False
-        count = self.cards.count(max(set(self.cards), key=self.cards.count))
-        return count == 9 or (count == 8 and config.BULL in self.cards)
 
     def _get_response(self, offer):
         """Returns list of cards if response can be made to this offer, or None

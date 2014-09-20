@@ -51,7 +51,7 @@ import copy
 import itertools
 import random
 
-from pit import config
+from pit import config, util
 
 
 # number of cycles before an offer expires
@@ -289,7 +289,8 @@ class GameEngine(object):
         """Ring the closing bell"""
         for player in self.players:
             player.closing_bell(bell_ring.player)
-        if self.has_winning_hand(bell_ring.player):
+
+        if util.is_winning_hand(self.game_state[bell_ring.player]['cards']):
             self.game_state['in_play'] = False
             for player in self.players:
                 player.closing_bell_confirmed(bell_ring.player)
@@ -309,25 +310,12 @@ class GameEngine(object):
             player_cards.remove(card)
         return True
 
-    def has_winning_hand(self, player):
-        """Returns True iff player has a valid winning hand
-
-        To have a winning hand, the player must have 9 cards consisting of only
-        a single commodity and (optionally) the bull card. Player must not have
-        the bear card at all.
-        """
-        cards = self.game_state[player]['cards']
-        if config.BEAR in cards:
-            return False
-        largest_group = cards.count(max(set(cards), key=cards.count))
-        return largest_group == 9 or largest_group == 8 and config.BULL in cards
-
     def update_scores(self):
         """Updates player scores at end of a round, sets winner if any."""
         for player in self.players:
             score = 0
             cards = self.game_state[player]['cards']
-            if self.has_winning_hand(player):
+            if util.is_winning_hand(self.game_state[player]['cards']):
                 commodity = max(set(cards), key=cards.count)
                 score += config.COMMODITIES[commodity]
                 if config.BULL in cards and cards.count(commodity) == config.COMMODITIES_PER_HAND:
