@@ -8,12 +8,26 @@ the end of the previous cycle, but the order of execution is random, so if two
 players attempt to do the same thing (e.g. respond to an offer or ring the
 trading bell), luck will determine who does it first.
 
+SUGGESTIONS:
+- at start of game provide players with starting info
+ - number of players, which specific cards are being used
+- at start of round, provide basic info
+- get rid of game state and just send info to players and let them keep
+  track of it themselves
+- send full hand to player with each trade (as the gameengine views it)
+
+
+
 TODO LIST:
+- do suggestions above
 - use new things added in the async version:
     - switch to Offer/Binding Offer terminology
-    - use util.py and config.py
+    - use util.py methods
+- get rid of Action subclasses like async version?
 - Remove prior open offers when player performs any action?
 - Have a trade take several cycles. Prob will increase strategy opportunity.
+  - yes block users for couple cycles after a trade (simulates time to exchange cards)
+  - also consider blocking users for 1 cycle after an offer or binding offer
 - error-checking of things like player hands, legal actions etc.
 - error-checking that cards are locked up when player issues a response
 - withdraw offer method?
@@ -37,29 +51,13 @@ import copy
 import itertools
 import random
 
+from pit import config
 
-WINNING_SCORE = 500
 
 # number of cycles before an offer expires
 OFFER_CYCLES = 10
 # number of cycles before a response expires
 RESPONSE_CYCLES = 5
-
-COMMODITIES = {
-    'wheat': 100,
-    'barley': 85,
-    'coffee': 80,
-    'corn': 75,
-    'sugar': 65,
-    'oats': 60,
-    'soybeans': 55,
-    'oranges': 50,
-}
-
-BULL = 'bull'
-BULL_PENALTY = 20
-BEAR = 'bear'
-BEAR_PENALTY = 20
 
 
 class Action(object):
@@ -168,13 +166,23 @@ class Player(object):
 
 
 class GameEngine(object):
-    def one_game(self, players, starting_dealer=0):
-        """Play one game with this list of players, returns winning player.
-        """
+    def play(self, players, games=1):
+        """Primary entry method, plays a number of games of Pit"""
         self.players = players
-        self.game_state = dict((player, {'score': 0}) for player in players)
+        results = dict([(player, 0) for player in players])
+        for game in range(games):
+            dealer = random.randint(0,len(players)-1)
+            winner = self.one_game(starting_dealer=dealer)
+            results[winner] += 1
+        return results
+
+    def one_game(self, starting_dealer=0):
+        """Play one game and returns winning player.
+        """
+        self.game_state = {}
         self.game_state['dealer'] = starting_dealer
         for player in self.players:
+            self.game_state[player] = {'score': 0}
             player.new_game(self.game_state)
 
         self.winner = None
@@ -309,10 +317,10 @@ class GameEngine(object):
         the bear card at all.
         """
         cards = self.game_state[player]['cards']
-        if BEAR in cards:
+        if config.BEAR in cards:
             return False
         largest_group = cards.count(max(set(cards), key=cards.count))
-        return largest_group == 9 or largest_group == 8 and BULL in cards
+        return largest_group == 9 or largest_group == 8 and config.BULL in cards
 
     def update_scores(self):
         """Updates player scores at end of a round, sets winner if any."""
@@ -321,16 +329,16 @@ class GameEngine(object):
             cards = self.game_state[player]['cards']
             if self.has_winning_hand(player):
                 commodity = max(set(cards), key=cards.count)
-                score += COMMODITIES[commodity]
-                if BULL in cards and cards.count(commodity) == 9:
+                score += config.COMMODITIES[commodity]
+                if config.BULL in cards and cards.count(commodity) == config.COMMODITIES_PER_HAND:
                     score *= 2
             else:
-                if BULL in cards:
-                    score -= BULL_PENALTY
-                if BEAR in cards:
-                    score -= BEAR_PENALTY
+                if config.BULL in cards:
+                    score -= config.BULL_PENALTY
+                if config.BEAR in cards:
+                    score -= config.BEAR_PENALTY
             self.game_state[player]['score'] += score
-            if self.game_state[player]['score'] >= WINNING_SCORE:
+            if self.game_state[player]['score'] >= config.WINNING_SCORE:
                 self.winner = player
 
     def clean_actions(self):
@@ -351,8 +359,8 @@ class GameEngine(object):
 
     def deal_cards(self):
         """Sets game_state cards to a new set of shuffled cards"""
-        cards = [BULL, BEAR]
-        for card in COMMODITIES.keys()[:len(self.players)]:
+        cards = [config.BULL, config.BEAR]
+        for card in config.COMMODITIES.keys()[:len(self.players)]:
             cards += [card]*9
         random.shuffle(cards)
 

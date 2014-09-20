@@ -3,7 +3,8 @@
 import random
 import copy
 
-import pit.sync.gameengine as gameengine
+from pit import config
+from pit.sync import gameengine
 
 
 class BasicPlayer(gameengine.Player):
@@ -58,10 +59,10 @@ class BasicPlayer(gameengine.Player):
 
     def _has_winning_hand(self):
         """True if currently holding a winning hand"""
-        if gameengine.BEAR in self.cards:
+        if config.BEAR in self.cards:
             return False
         count = self.cards.count(max(set(self.cards), key=self.cards.count))
-        return count == 9 or (count == 8 and gameengine.BULL in self.cards)
+        return count == 9 or (count == 8 and config.BULL in self.cards)
 
     def _get_response(self, offer):
         """Returns list of cards if response can be made to this offer, or None
@@ -76,8 +77,8 @@ class BasicPlayer(gameengine.Player):
         Randomly chooses cards to see if quantity matches for a trade. Also
         tries to add the bull/bear/both cards to make the quantity match.
         """
-        bull = gameengine.BULL
-        bear = gameengine.BEAR
+        bull = config.BULL
+        bear = config.BEAR
         commodities = self.card_groups.keys()
         random.shuffle(commodities)
         for commodity in commodities:
