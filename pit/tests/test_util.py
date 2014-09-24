@@ -112,7 +112,7 @@ class HandTest(unittest.TestCase):
         commodity = 'wheat'
         cards = [commodity] * config.COMMODITIES_PER_HAND
         score = util.score_hand(cards)
-        self.assertEqual(score, config.COMMODITIES[commodity])
+        self.assertEqual(score, config.COMMODITY_VALUES[commodity])
 
     def test_score_bull_winning_hand(self):
         """Score using BULL as a wildcard is correct"""
@@ -120,7 +120,7 @@ class HandTest(unittest.TestCase):
         cards = [commodity] * (config.COMMODITIES_PER_HAND - 1)
         cards.append(config.BULL)
         score = util.score_hand(cards)
-        self.assertEqual(score, config.COMMODITIES[commodity])
+        self.assertEqual(score, config.COMMODITY_VALUES[commodity])
 
     def test_score_bonus_winning_hand(self):
         """Score with a double bonus for BULL is correct"""
@@ -128,7 +128,7 @@ class HandTest(unittest.TestCase):
         cards = [commodity] * config.COMMODITIES_PER_HAND
         cards.append(config.BULL)
         score = util.score_hand(cards)
-        self.assertEqual(score, config.COMMODITIES[commodity] * 2)
+        self.assertEqual(score, config.COMMODITY_VALUES[commodity] * 2)
 
     def test_score_neutral_hand(self):
         """A neutral hand has a score of 0"""
@@ -236,3 +236,36 @@ class MatchingTest(unittest.TestCase):
         """Match found with nothing included"""
         matches = util.matching_groups_with([], self.card_groups, 3)
         self.assertEqual(matches, [['d', 'd', 'd']])
+
+
+class DealTest(unittest.TestCase):
+    """Tests for dealing cards"""
+    def _flatten(self, hands):
+        """Helper flattens 2D cards to a 1D list"""
+        return [card for hand in hands for card in hand]
+
+    def test_num_dealt(self):
+        """Right number of cards dealt and BULL & BEAR present"""
+        cards = self._flatten(util.deal_cards(7, 0))
+        self.assertEqual(len(cards), 7*config.COMMODITIES_PER_HAND+2)
+        self.assertTrue(config.BULL in cards)
+        self.assertTrue(config.BEAR in cards)
+
+    def test_player_hand_lengths(self):
+        """Right number of cards dealt to each player position"""
+        hands = util.deal_cards(5, 2)
+        self.assertEqual(len(hands[0]), config.COMMODITIES_PER_HAND)
+        self.assertEqual(len(hands[1]), config.COMMODITIES_PER_HAND)
+        self.assertEqual(len(hands[2]), config.COMMODITIES_PER_HAND)
+        self.assertEqual(len(hands[3]), config.COMMODITIES_PER_HAND + 1)
+        self.assertEqual(len(hands[4]), config.COMMODITIES_PER_HAND + 1)
+
+    def test_all_cards_used(self):
+        """Exactly all of the cards are used in the deal"""
+        cards = self._flatten(util.deal_cards(3, 1))
+        expected = [config.COMMODITIES[0]] * config.COMMODITIES_PER_HAND + \
+                   [config.COMMODITIES[1]] * config.COMMODITIES_PER_HAND + \
+                   [config.COMMODITIES[2]] * config.COMMODITIES_PER_HAND + \
+                   [config.BULL, config.BEAR]
+        self.assertEqual(sorted(cards), sorted(expected))
+

@@ -164,27 +164,10 @@ class GameEngine(object):
     def deal_cards(self):
         """Notifies players of new game, sends them their cards
         """
-        """Sets game_state cards to a new set of shuffled cards"""
-        cards = [config.BULL, config.BEAR]
-        for card in config.COMMODITIES.keys()[:len(self.players)]:
-            cards += [card] * config.COMMODITIES_PER_HAND
-        random.shuffle(cards)
-
-        # the two players to the right of the dealer get extra cards
-        extra1 = self.next_player(self.dealer)
-        extra2 = self.next_player(extra1)
+        cards = util.deal_cards(len(self.players), self.dealer)
         for index, (uid, data) in enumerate(self.player_data.iteritems()):
-            range_start = index * config.COMMODITIES_PER_HAND
-            range_end = range_start + config.COMMODITIES_PER_HAND
-            data['cards'] = cards[range_start:range_end]
-            if index == extra1:
-                data['cards'].append(cards[-2])
-            elif index == extra2:
-                data['cards'].append(cards[-1])
-
-        for uid, data in self.player_data.iteritems():
-            cards = data['cards']
-            message = Message(Message.NEW_ROUND, cards=cards)
+            data['cards'] = cards[index]
+            message = Message(Message.NEW_ROUND, cards=cards[index])
             data['conn'].send(message)
 
     def next_player(self, player):

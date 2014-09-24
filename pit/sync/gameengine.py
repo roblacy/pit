@@ -336,26 +336,13 @@ class GameEngine(object):
 
     def deal_cards(self):
         """Sets game_state cards to a new set of shuffled cards"""
-        cards = [config.BULL, config.BEAR]
-        for card in config.COMMODITIES.keys()[:len(self.players)]:
-            cards += [card]*9
-        random.shuffle(cards)
-
+        cards = util.deal_cards(len(self.players), self.game_state['dealer'])
         for index, player in enumerate(self.players):
-            self.game_state[player]['cards'] = cards[index*9:index*9+9]
-        extra1 = self.game_state['dealer'] + 1
-        if extra1 >= len(self.players):
-            extra1 -= len(self.players)
-        extra2 = self.game_state['dealer'] +2
-        if extra2 >= len(self.players):
-            extra2 -= len(self.players)
-        self.game_state[self.players[extra1]]['cards'].append(cards[-2])
-        self.game_state[self.players[extra2]]['cards'].append(cards[-1])
+            self.game_state[player]['cards'] = cards[index]
 
     def next_dealer(self):
         """Advances dealer"""
-        next = self.game_state['dealer'] + 1
-        self.game_state['dealer'] = next if next < len(self.players) else 0
+        return util.next_position(self.game_state['dealer'], len(self.players))
 
     def debug(self):
         """Helper to print game state and exit game"""
