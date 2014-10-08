@@ -53,6 +53,11 @@ class HasCardsTest(unittest.TestCase):
         """
         self.assertTrue(util.has_cards(['c', 'c'], self.cards, self.locked_groups))
 
+    def test_cards_available_none_locked(self):
+        """has_cards returns True when cards are available with no locked groups
+        """
+        self.assertTrue(util.has_cards(['c', 'c'], self.cards, []))
+
     def test_cards_locked(self):
         """has_cards returns False when cards are locked
         """

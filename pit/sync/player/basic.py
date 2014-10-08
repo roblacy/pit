@@ -1,7 +1,8 @@
 """Basic player(s) for the Pit game
 """
-import random
 import copy
+import itertools
+import random
 
 from pit import config, util
 from pit.sync import gameengine
@@ -18,36 +19,47 @@ class BasicPlayer(gameengine.Player):
     - if I have exactly 5 and 5 of two commodities, be able to break one
       of them up and trade less than 5 cards
     """
+    # number of cycles to let an offer exist before ignoring it forever
+    OFFER_EXPIRATION = 2
+
     def __init__(self, name):
         super(BasicPlayer, self).__init__()
         self.name = name
 
-    def new_game(self, game_state):
-        self.game_state = game_state
-
-    def new_round(self, cards):
+    def new_round(self, hand, card_counts):
         """New round of a game started, includes player's cards"""
-        self.cards = cards
+        self.hand = hand
+        self.offers = []
+        self.my_offers = []
 
-    def get_action(self):
+    def get_action(self, cycle):
         """Returns action for this cycle
 
-        1. if winning hand, ring the bell
-        2. try to respond to an open offer
-        3. make a new offer
+        1. update internal game state
+        2. if winning hand, ring the bell
+        3. try to respond to an open offer
+        4. make a new offer
         """
+        self.cycle = cycle
+        self.offers = self._active_offers(self.offers)
         self._group_cards()
 
-        if util.is_winning_hand(self.cards):
+        if util.is_winning_hand(self.hand):
             return gameengine.BellRing(self)
-        offers = copy.copy(self.game_state['offers'])
-        random.shuffle(offers)
-        for offer in offers:
+
+        random.shuffle(self.offers)
+        for offer in self.offers:
             cards = self._get_response(offer)
             if cards:
+                self.offers.remove(offer)
                 return gameengine.Response(offer, self, cards)
-        # cannot respond to any open offers so generate a new one
+
         return self._make_offer()
+
+    def offer_made(self, offer):
+        """A player has called out an offer for anyone to respond"""
+        if offer.player != self:
+            self.offers.append(offer)
 
     def response_made(self, response):
         """Confirms (if possible) or rejects a response to a previous offer
@@ -57,11 +69,21 @@ class BasicPlayer(gameengine.Player):
         self._group_cards()
         return self._matching_cards(response.offer)
 
+    def trade_confirmation(self, response, hand=None):
+        """Two players have made a trade, including new hand if I'm involved.
+        """
+        if hand and (response.player == self or response.offer.player == self):
+            if response.offer in self.my_offers:
+                self.my_offers.remove(response.offer)
+            self.hand = hand
+
+    def offer_expired(self, offer):
+        """A prior offer has expired without executing, remove from list"""
+        self.my_offers.remove(offer)
+
     def _get_response(self, offer):
         """Returns list of cards if response can be made to this offer, or None
         """
-        if offer.player == self:
-            return None
         return self._matching_cards(offer)
 
     def _matching_cards(self, offer):
@@ -79,13 +101,13 @@ class BasicPlayer(gameengine.Player):
             if quantity == offer.quantity:
                 return [commodity] * quantity
             elif commodity not in [bull, bear]:
-                if bull in self.cards and offer.quantity == quantity+1:
+                if bull in self.hand and offer.quantity == quantity+1:
                     return [commodity] * quantity + [bull]
-                elif bear in self.cards and offer.quantity == quantity+1:
+                elif bear in self.hand and offer.quantity == quantity+1:
                     return [commodity] * quantity + [bear]
                 elif (
-                        bull in self.cards and
-                        bear in self.cards and
+                        bull in self.hand and
+                        bear in self.hand and
                         offer.quantity == quantity+2):
                     return [commodity] * quantity + [bull, bear]
         return None
@@ -95,18 +117,22 @@ class BasicPlayer(gameengine.Player):
 
         Max of 4 cards can be part of an offer
         """
-        existing_quantities = [
-            offer.quantity for offer in self.game_state['offers']
-            if offer.player == self
-        ]
+        existing_quantities = [offer.quantity for offer in self.my_offers]
         quantities = self.card_groups.values()
         random.shuffle(quantities)
         for quantity in quantities:
             if quantity <= 4 and quantity not in existing_quantities:
-                return gameengine.Offer(self, quantity)
+                offer = gameengine.Offer(self, quantity)
+                self.my_offers.append(offer)
+                return offer
 
     def _group_cards(self):
         """Breaks cards into groups keyed by type, count as values"""
         self.card_groups = {}
-        for card in set(self.cards):
-            self.card_groups[card] = self.cards.count(card)
+        for card in set(self.hand):
+            self.card_groups[card] = self.hand.count(card)
+
+    def _active_offers(self, offers):
+        """Return list of offers that have not expired"""
+        exp = lambda offer: self.cycle - offer.cycle > self.OFFER_EXPIRATION
+        return list(itertools.ifilterfalse(exp, offers))
