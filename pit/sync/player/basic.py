@@ -6,9 +6,10 @@ import random
 
 from pit import config, util
 from pit.sync import gameengine
+from pit.sync.player import base
 
 
-class BasicPlayer(gameengine.Player):
+class BasicPlayer(base.Player):
     """A basic player for the Pit game engine.
 
     This player has no real strategy. It will always make a trade if one is
@@ -35,11 +36,15 @@ class BasicPlayer(gameengine.Player):
     def get_action(self, cycle):
         """Returns action for this cycle
 
-        1. update internal game state
-        2. if winning hand, ring the bell
-        3. try to respond to an open offer
-        4. make a new offer
+        1. randomly do nothing just to mix it up
+        2. update internal game state
+        3. if winning hand, ring the bell
+        4. try to respond to an open offer
+        5. make a new offer
         """
+        if random.randrange(0,5) == 4:
+            return None
+
         self.cycle = cycle
         self.offers = self._active_offers(self.offers)
         self._group_cards()
@@ -73,12 +78,14 @@ class BasicPlayer(gameengine.Player):
         """Two players have made a trade, including new hand if I'm involved.
         """
         if hand and (response.player == self or response.offer.player == self):
+            # TODO compare in a different way in case this is a copy of the offer
             if response.offer in self.my_offers:
                 self.my_offers.remove(response.offer)
             self.hand = hand
 
     def offer_expired(self, offer):
         """A prior offer has expired without executing, remove from list"""
+        # TODO compare in a different way in case this is a copy of the offer
         self.my_offers.remove(offer)
 
     def _get_response(self, offer):
