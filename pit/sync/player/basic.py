@@ -78,14 +78,12 @@ class BasicPlayer(base.Player):
         """Two players have made a trade, including new hand if I'm involved.
         """
         if hand and (response.player == self or response.offer.player == self):
-            # TODO compare in a different way in case this is a copy of the offer
             if response.offer in self.my_offers:
                 self.my_offers.remove(response.offer)
             self.hand = hand
 
     def offer_expired(self, offer):
         """A prior offer has expired without executing, remove from list"""
-        # TODO compare in a different way in case this is a copy of the offer
         self.my_offers.remove(offer)
 
     def _get_response(self, offer):

@@ -58,3 +58,7 @@ class Player(object):
 
     def __repr__(self):
         return unicode(self).encode('utf-8')
+
+    def __eq__(self, player):
+        """Returns True iff this player's name matches the other's"""
+        return self.name == player.name

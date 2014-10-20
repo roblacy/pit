@@ -17,8 +17,7 @@ be notified and will still be able to make the trade (causing them to get
 delayed yet again).
 
 TODO LIST:
-- pass copies of offers/responses to all the players maybe
-  - or find a way to make offers/responses read-only after init?
+- notification about responses made and rejected
 - more error-checking of things like player hands, legal actions etc.
 """
 import copy
@@ -30,8 +29,6 @@ from pit import config, util
 
 # number of cycles before an offer expires
 OFFER_CYCLES = 10
-# number of cycles before a response expires
-RESPONSE_CYCLES = 5
 # cycles a player must wait after making an offer
 OFFER_DURATION = 1
 # cycles a player must wait after making a response (if no trade resulted)
@@ -54,6 +51,10 @@ class Action(object):
     def __repr__(self):
         return unicode(self).encode('utf-8')
 
+    def copy(self):
+        """Should return a new instance that is a copy of the action"""
+        raise NotImplementedError
+
 
 class Offer(Action):
     """An offer to trade a certain number of cards, made to anyone/everyone.
@@ -67,6 +68,17 @@ class Offer(Action):
     def __unicode__(self):
         return 'Offer in cycle {2} by {0} for {1}'.format(
             self.player, self.quantity, self.cycle)
+
+    def copy(self):
+        """Returns a copy of this offer"""
+        offer = Offer(self.player, self.quantity)
+        offer.cycle = self.cycle
+        return offer
+
+    def __eq__(self, offer):
+        """Returns True iff all fields of this offer equal the other"""
+        return (self.player == offer.player and
+                self.quantity == offer.quantity)
 
 
 class Response(Action):
@@ -87,6 +99,12 @@ class Response(Action):
     def __unicode__(self):
         return 'Response in cycle {2} by {0} to {1}'.format(
             self.player, self.offer, self.cycle)
+
+    def copy(self):
+        """Returns a copy of this response"""
+        response = Response(self.offer.copy(), self.player, self.cards)
+        response.cycle = self.cycle
+        return response
 
 
 class BellRing(Action):
@@ -179,7 +197,7 @@ class GameEngine(object):
         offer.cycle = self.game_state['cycle']
         self.game_state['offers'].append(offer)
         for player in self.available_players():
-            player.offer_made(offer)
+            player.offer_made(offer.copy())
         self.delay_player(offer.player, OFFER_DURATION)
 
 
@@ -231,11 +249,11 @@ class GameEngine(object):
         # notify players of trade, send full hands to the two involved
         for player in self.players:
             if player == response.player:
-                player.trade_confirmation(response, hand=self.game_state[response.player]['cards'])
+                player.trade_confirmation(response.copy(), hand=self.game_state[response.player]['cards'])
             elif player == response.offer.player:
-                player.trade_confirmation(response, hand=self.game_state[response.offer.player]['cards'])
+                player.trade_confirmation(response.copy(), hand=self.game_state[response.offer.player]['cards'])
             elif player in self.available_players():
-                player.trade_confirmation(response, hand=None)
+                player.trade_confirmation(response.copy(), hand=None)
 
         # the two players who trade are now busy for a bit
         self.delay_player(response.player, TRADE_DURATION)
