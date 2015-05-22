@@ -1,9 +1,5 @@
 """Pit game engine
 
-Right now this is the "count to 1000" game so I could play around with
-threads and notifications. The next step is to copy Pit functionality over from
-the synchronous version.
-
 TODO:
  - add validation check that offer cards are legal (all same plus bull/bear)
 """
